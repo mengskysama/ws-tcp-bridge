@@ -34,11 +34,13 @@ function initSocketCallbacks(state,ws,s) {
 	s.on('close', function(had_error) {
 		ws.removeAllListeners('close');		
 		ws.close();
+		state.sCloesd = true
 	});
 
 	ws.on('close', function() {
 		s.removeAllListeners('close');	
 		s.end();
+		state.sCloesd = true
 	});
 
 	ws.on('error', function (e) {
@@ -48,15 +50,16 @@ function initSocketCallbacks(state,ws,s) {
 		s.removeAllListeners('close');
 		ws.close();
 		s.end();
+		state.sCloesd = true
 	});
 
 	s.on('error', function (e) {
-		console.log('socket error');
 		console.log(e);
 		ws.removeAllListeners('close');
 		s.removeAllListeners('close');
 		ws.close();
 		s.end();
+		state.sCloesd = true
 	});
 
 	s.on('connect', function() {
@@ -70,19 +73,23 @@ function initSocketCallbacks(state,ws,s) {
 	});
 
 	s.on('data', function(data) {
-
 		if(! state.wsReady) {
 			state.wsBuffer.push(data);
-		} else {
-			ws.send(data,{binary: true,mask: wsMask});
+		} else if (ws.readyState != 1) {
+			return
+		}else {
+			ws.send(data, {binary: true,mask: wsMask});
 		}
 	});
 
 	ws.on('message', function(m,flags) {
+		if (state.sCloesd) {
+			return
+		}
 		if(!state.sReady) {
 			state.sBuffer.push(m);
 		} else {
-			s.write(m);			
+			s.write(m);
 		}
 	});
 }
@@ -92,17 +99,19 @@ function tcp2ws() {
 	console.log('forwarding port ' + argv.lport + ' to ' + argv.rhost);
 
 	var server = net.createServer(function(s) {
+
 		var ws = new ws_module(argv.rhost);
 		
 		var state = {
-			sReady : false,
+			sReady : true,
 			wsReady : false,
+			sCloesd : false,
 			wsBuffer: [],
 			sBuffer : []
 		};
 		initSocketCallbacks(state,ws,s);
 	});
-	server.listen(argv.lport);
+	server.listen(argv.lport, '0.0.0.0');
 }
 
 function ws2tcp() {
@@ -118,6 +127,7 @@ function ws2tcp() {
 		var state = {
 			sReady : false,
 			wsReady : true, // there is no callback so i assume its already connected
+			sCloesd : false,
 			wsBuffer: [],
 			sBuffer : []
 		};
